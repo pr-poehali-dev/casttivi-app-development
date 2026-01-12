@@ -15,6 +15,7 @@ type Podcast = {
   id: number;
   title: string;
   author: string;
+  authorId: string;
   avatar: string;
   duration: string;
   views: number;
@@ -23,82 +24,19 @@ type Podcast = {
   category: string;
   rating: number;
   audioUrl?: string;
+  uploadedAt: string;
 };
 
-const initialPodcasts: Podcast[] = [
-  {
-    id: 1,
-    title: 'Квантовая физика и будущее технологий',
-    author: 'Александр Иванов',
-    avatar: 'AI',
-    duration: '45:23',
-    views: 12500,
-    likes: 892,
-    gradient: 'gradient-purple',
-    category: 'Наука',
-    rating: 4.8
-  },
-  {
-    id: 2,
-    title: 'История российской музыки: от классики до хип-хопа',
-    author: 'Мария Соколова',
-    avatar: 'МС',
-    duration: '38:15',
-    views: 8900,
-    likes: 645,
-    gradient: 'gradient-orange',
-    category: 'Музыка',
-    rating: 4.6
-  },
-  {
-    id: 3,
-    title: 'Предпринимательство в эпоху AI',
-    author: 'Дмитрий Петров',
-    avatar: 'ДП',
-    duration: '52:40',
-    views: 15200,
-    likes: 1120,
-    gradient: 'gradient-blue',
-    category: 'Бизнес',
-    rating: 4.9
-  },
-  {
-    id: 4,
-    title: 'Психология современных отношений',
-    author: 'Елена Волкова',
-    avatar: 'ЕВ',
-    duration: '41:30',
-    views: 9800,
-    likes: 734,
-    gradient: 'gradient-purple',
-    category: 'Психология',
-    rating: 4.7
-  },
-  {
-    id: 5,
-    title: 'Космос: новые открытия 2026',
-    author: 'Игорь Новиков',
-    avatar: 'ИН',
-    duration: '48:50',
-    views: 11300,
-    likes: 856,
-    gradient: 'gradient-orange',
-    category: 'Наука',
-    rating: 4.8
-  },
-  {
-    id: 6,
-    title: 'Медитация и осознанность в XXI веке',
-    author: 'Анна Морозова',
-    avatar: 'АМ',
-    duration: '35:20',
-    views: 7600,
-    likes: 612,
-    gradient: 'gradient-blue',
-    category: 'Здоровье',
-    rating: 4.5
-  }
-];
+type UserProfile = {
+  id: string;
+  username: string;
+  email: string;
+  avatar: string;
+  bio: string;
+  joinedDate: string;
+};
+
+const initialPodcasts: Podcast[] = [];
 
 const comments = [
   { id: 1, author: 'Сергей К.', text: 'Невероятно интересный подкаст! Слушал на одном дыхании 🔥', avatar: 'СК' },
@@ -120,13 +58,31 @@ export default function Index() {
   const [duration, setDuration] = useState(0);
   const [volume, setVolume] = useState(80);
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
+  const [profileDialogOpen, setProfileDialogOpen] = useState(false);
+  const [settingsDialogOpen, setSettingsDialogOpen] = useState(false);
+  const [showMyPodcasts, setShowMyPodcasts] = useState(false);
   const audioRef = useRef<HTMLAudioElement>(null);
+  
+  const [userProfile, setUserProfile] = useState<UserProfile>({
+    id: 'user-1',
+    username: 'Мой Канал',
+    email: 'user@casttivi.com',
+    avatar: 'Я',
+    bio: 'Добро пожаловать на мой канал!',
+    joinedDate: '2026-01-01'
+  });
   
   const [uploadForm, setUploadForm] = useState({
     title: '',
     category: '',
     duration: '',
     gradient: 'gradient-purple'
+  });
+  
+  const [profileEditForm, setProfileEditForm] = useState({
+    username: userProfile.username,
+    email: userProfile.email,
+    bio: userProfile.bio
   });
 
   const currentPodcast = podcasts.find(p => p.id === selectedPodcast);
@@ -187,22 +143,42 @@ export default function Index() {
     if (!uploadForm.title || !uploadForm.category) return;
     
     const newPodcast: Podcast = {
-      id: podcasts.length + 1,
+      id: Date.now(),
       title: uploadForm.title,
-      author: 'Вы',
-      avatar: 'Я',
+      author: userProfile.username,
+      authorId: userProfile.id,
+      avatar: userProfile.avatar,
       duration: uploadForm.duration || '00:00',
       views: 0,
       likes: 0,
       gradient: uploadForm.gradient,
       category: uploadForm.category,
-      rating: 5.0
+      rating: 5.0,
+      uploadedAt: new Date().toISOString()
     };
     
     setPodcasts([newPodcast, ...podcasts]);
     setUploadDialogOpen(false);
     setUploadForm({ title: '', category: '', duration: '', gradient: 'gradient-purple' });
   };
+  
+  const handleUpdateProfile = () => {
+    setUserProfile({
+      ...userProfile,
+      username: profileEditForm.username,
+      email: profileEditForm.email,
+      bio: profileEditForm.bio
+    });
+    setProfileDialogOpen(false);
+  };
+  
+  const handleDeletePodcast = (id: number) => {
+    setPodcasts(podcasts.filter(p => p.id !== id));
+  };
+  
+  const myPodcasts = podcasts.filter(p => p.authorId === userProfile.id);
+  const totalViews = myPodcasts.reduce((sum, p) => sum + p.views, 0);
+  const totalLikes = myPodcasts.reduce((sum, p) => sum + p.likes, 0);
 
   const handleLike = (id: number) => {
     setLikedPodcasts(prev => {
@@ -244,7 +220,25 @@ export default function Index() {
 
   const renderMainFeed = () => (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 p-6 animate-fade-in">
-      {filteredPodcasts.map((podcast, idx) => (
+      {filteredPodcasts.length === 0 ? (
+        <div className="col-span-full text-center py-20">
+          <Icon name="Radio" size={80} className="mx-auto mb-6 text-muted-foreground" />
+          <h2 className="font-heading font-bold text-3xl mb-4">Добро пожаловать в CastTivi!</h2>
+          <p className="text-muted-foreground mb-8 max-w-md mx-auto">
+            Начните загружать свои подкасты и делитесь ими с миром. 
+            Нажмите кнопку "Загрузить" в правом верхнем углу.
+          </p>
+          <Button
+            className="gradient-purple border-0"
+            size="lg"
+            onClick={() => setUploadDialogOpen(true)}
+          >
+            <Icon name="Upload" size={20} className="mr-2" />
+            Загрузить первый подкаст
+          </Button>
+        </div>
+      ) : (
+        filteredPodcasts.map((podcast, idx) => (
         <Card 
           key={podcast.id} 
           className={`overflow-hidden cursor-pointer hover-scale border-0 ${podcast.gradient} animate-scale-in`}
@@ -295,7 +289,8 @@ export default function Index() {
             </div>
           </div>
         </Card>
-      ))}
+        ))
+      )}
     </div>
   );
 
@@ -424,7 +419,7 @@ export default function Index() {
                   </Button>
                 </div>
 
-                <div className="flex items-center gap-3 mb-6">
+                <div className="flex items-center gap-3 mb-6 flex-wrap">
                   <Button
                     variant="outline"
                     size="lg"
@@ -451,6 +446,20 @@ export default function Index() {
                     <Icon name="Share2" size={20} className="mr-2" />
                     Поделиться
                   </Button>
+                  {currentPodcast.authorId === userProfile.id && (
+                    <Button 
+                      variant="outline" 
+                      size="lg"
+                      className="text-destructive hover:bg-destructive/20"
+                      onClick={() => {
+                        handleDeletePodcast(currentPodcast.id);
+                        setSelectedPodcast(null);
+                      }}
+                    >
+                      <Icon name="Trash2" size={20} className="mr-2" />
+                      Удалить
+                    </Button>
+                  )}
                 </div>
               </div>
 
@@ -492,6 +501,85 @@ export default function Index() {
   };
 
   const renderSection = () => {
+    if (showMyPodcasts) {
+      return (
+        <div className="p-6">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="font-heading font-bold text-2xl">Мои подкасты</h2>
+            <Button
+              variant="outline"
+              onClick={() => setShowMyPodcasts(false)}
+            >
+              <Icon name="X" size={18} className="mr-2" />
+              Закрыть
+            </Button>
+          </div>
+          {myPodcasts.length === 0 ? (
+            <div className="text-center py-12">
+              <Icon name="Video" size={64} className="mx-auto mb-4 text-muted-foreground" />
+              <p className="text-muted-foreground mb-4">
+                У вас пока нет загруженных подкастов
+              </p>
+              <Button
+                className="gradient-purple border-0"
+                onClick={() => setUploadDialogOpen(true)}
+              >
+                <Icon name="Upload" size={18} className="mr-2" />
+                Загрузить первый подкаст
+              </Button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {myPodcasts.map((podcast) => (
+                <Card 
+                  key={podcast.id} 
+                  className={`overflow-hidden border-0 ${podcast.gradient} group relative`}
+                >
+                  <div 
+                    className="cursor-pointer"
+                    onClick={() => setSelectedPodcast(podcast.id)}
+                  >
+                    <div className="aspect-video relative overflow-hidden">
+                      <div className="absolute inset-0 flex items-center justify-center text-6xl font-bold text-white/20 font-heading">
+                        {podcast.category[0]}
+                      </div>
+                      <div className="absolute top-3 right-3">
+                        <Badge className="bg-black/40 backdrop-blur-sm border-0 text-white">
+                          {podcast.duration}
+                        </Badge>
+                      </div>
+                    </div>
+                    <div className="p-4 bg-card/95">
+                      <h3 className="font-heading font-bold text-base line-clamp-2 mb-2">
+                        {podcast.title}
+                      </h3>
+                      <div className="flex items-center justify-between text-sm text-muted-foreground">
+                        <span>{podcast.views} просмотров</span>
+                        <span>{podcast.likes} лайков</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="absolute top-2 left-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <Button
+                      size="icon"
+                      variant="destructive"
+                      className="w-8 h-8"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeletePodcast(podcast.id);
+                      }}
+                    >
+                      <Icon name="Trash2" size={16} />
+                    </Button>
+                  </div>
+                </Card>
+              ))}
+            </div>
+          )}
+        </div>
+      );
+    }
+
     if (activeSection === 'likes') {
       const likedPodcastsList = podcasts.filter(p => likedPodcasts.has(p.id));
       return (
@@ -705,11 +793,245 @@ export default function Index() {
               </DialogContent>
             </Dialog>
             
-            <Avatar className="border-2 border-primary cursor-pointer hover-scale">
-              <AvatarFallback className="bg-primary/20 text-primary font-semibold">
-                Я
-              </AvatarFallback>
-            </Avatar>
+            <Dialog>
+              <DialogTrigger asChild>
+                <Avatar className="border-2 border-primary cursor-pointer hover-scale">
+                  <AvatarFallback className="bg-primary/20 text-primary font-semibold">
+                    {userProfile.avatar}
+                  </AvatarFallback>
+                </Avatar>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-[700px]">
+                <DialogHeader>
+                  <DialogTitle className="font-heading text-2xl">Меню</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-3">
+                  <Card 
+                    className="p-4 cursor-pointer hover-scale bg-gradient-to-r from-primary/20 to-secondary/20 border-0"
+                    onClick={() => {
+                      setProfileDialogOpen(true);
+                    }}
+                  >
+                    <div className="flex items-center gap-4">
+                      <Avatar className="w-16 h-16 border-2 border-primary">
+                        <AvatarFallback className="bg-primary/20 text-primary text-2xl font-bold">
+                          {userProfile.avatar}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1">
+                        <h3 className="font-heading font-bold text-xl">{userProfile.username}</h3>
+                        <p className="text-sm text-muted-foreground">{userProfile.email}</p>
+                      </div>
+                      <Icon name="ChevronRight" size={24} />
+                    </div>
+                  </Card>
+
+                  <div className="grid grid-cols-3 gap-3 p-3 bg-card/50 rounded-lg">
+                    <div className="text-center">
+                      <p className="text-2xl font-bold gradient-purple bg-clip-text text-transparent">
+                        {myPodcasts.length}
+                      </p>
+                      <p className="text-xs text-muted-foreground">Подкастов</p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-2xl font-bold gradient-orange bg-clip-text text-transparent">
+                        {totalViews.toLocaleString()}
+                      </p>
+                      <p className="text-xs text-muted-foreground">Просмотров</p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-2xl font-bold gradient-blue bg-clip-text text-transparent">
+                        {totalLikes}
+                      </p>
+                      <p className="text-xs text-muted-foreground">Лайков</p>
+                    </div>
+                  </div>
+
+                  <Button
+                    variant="outline"
+                    className="w-full justify-start"
+                    onClick={() => setShowMyPodcasts(!showMyPodcasts)}
+                  >
+                    <Icon name="Video" size={20} className="mr-3" />
+                    Мои подкасты
+                    <Badge className="ml-auto">{myPodcasts.length}</Badge>
+                  </Button>
+
+                  <Button
+                    variant="outline"
+                    className="w-full justify-start"
+                    onClick={() => setSettingsDialogOpen(true)}
+                  >
+                    <Icon name="Settings" size={20} className="mr-3" />
+                    Настройки
+                  </Button>
+
+                  <Button
+                    variant="outline"
+                    className="w-full justify-start text-muted-foreground"
+                  >
+                    <Icon name="HelpCircle" size={20} className="mr-3" />
+                    Помощь и поддержка
+                  </Button>
+
+                  <Button
+                    variant="outline"
+                    className="w-full justify-start text-destructive hover:text-destructive"
+                  >
+                    <Icon name="LogOut" size={20} className="mr-3" />
+                    Выйти
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
+
+            <Dialog open={profileDialogOpen} onOpenChange={setProfileDialogOpen}>
+              <DialogContent className="sm:max-w-[500px]">
+                <DialogHeader>
+                  <DialogTitle className="font-heading text-2xl">Редактировать профиль</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <div className="flex justify-center">
+                    <Avatar className="w-24 h-24 border-4 border-primary">
+                      <AvatarFallback className="bg-primary/20 text-primary text-4xl font-bold">
+                        {userProfile.avatar}
+                      </AvatarFallback>
+                    </Avatar>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="username">Имя канала</Label>
+                    <Input
+                      id="username"
+                      value={profileEditForm.username}
+                      onChange={(e) => setProfileEditForm({ ...profileEditForm, username: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="email">Email</Label>
+                    <Input
+                      id="email"
+                      type="email"
+                      value={profileEditForm.email}
+                      onChange={(e) => setProfileEditForm({ ...profileEditForm, email: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="bio">Описание канала</Label>
+                    <Textarea
+                      id="bio"
+                      value={profileEditForm.bio}
+                      onChange={(e) => setProfileEditForm({ ...profileEditForm, bio: e.target.value })}
+                      rows={3}
+                    />
+                  </div>
+                  <Button
+                    className="w-full gradient-purple border-0"
+                    onClick={handleUpdateProfile}
+                  >
+                    <Icon name="Save" size={18} className="mr-2" />
+                    Сохранить изменения
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
+
+            <Dialog open={settingsDialogOpen} onOpenChange={setSettingsDialogOpen}>
+              <DialogContent className="sm:max-w-[600px]">
+                <DialogHeader>
+                  <DialogTitle className="font-heading text-2xl">Настройки</DialogTitle>
+                </DialogHeader>
+                <ScrollArea className="h-[500px] pr-4">
+                  <div className="space-y-6">
+                    <div>
+                      <h3 className="font-heading font-bold text-lg mb-3">Воспроизведение</h3>
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between p-3 bg-card/50 rounded-lg">
+                          <div>
+                            <p className="font-semibold">Автовоспроизведение</p>
+                            <p className="text-sm text-muted-foreground">
+                              Автоматически запускать следующий подкаст
+                            </p>
+                          </div>
+                          <Button variant="outline" size="sm">Вкл</Button>
+                        </div>
+                        <div className="flex items-center justify-between p-3 bg-card/50 rounded-lg">
+                          <div>
+                            <p className="font-semibold">Качество звука</p>
+                            <p className="text-sm text-muted-foreground">
+                              Высокое качество (320 kbps)
+                            </p>
+                          </div>
+                          <Button variant="outline" size="sm">Изм</Button>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div>
+                      <h3 className="font-heading font-bold text-lg mb-3">Уведомления</h3>
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between p-3 bg-card/50 rounded-lg">
+                          <div>
+                            <p className="font-semibold">Новые подкасты</p>
+                            <p className="text-sm text-muted-foreground">
+                              От авторов на которых вы подписаны
+                            </p>
+                          </div>
+                          <Button variant="outline" size="sm">Вкл</Button>
+                        </div>
+                        <div className="flex items-center justify-between p-3 bg-card/50 rounded-lg">
+                          <div>
+                            <p className="font-semibold">Комментарии</p>
+                            <p className="text-sm text-muted-foreground">
+                              Ответы на ваши комментарии
+                            </p>
+                          </div>
+                          <Button variant="outline" size="sm">Вкл</Button>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div>
+                      <h3 className="font-heading font-bold text-lg mb-3">Конфиденциальность</h3>
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between p-3 bg-card/50 rounded-lg">
+                          <div>
+                            <p className="font-semibold">История просмотров</p>
+                            <p className="text-sm text-muted-foreground">
+                              Сохранять историю прослушивания
+                            </p>
+                          </div>
+                          <Button variant="outline" size="sm">Вкл</Button>
+                        </div>
+                        <div className="flex items-center justify-between p-3 bg-card/50 rounded-lg">
+                          <div>
+                            <p className="font-semibold">Публичный профиль</p>
+                            <p className="text-sm text-muted-foreground">
+                              Другие могут видеть ваш профиль
+                            </p>
+                          </div>
+                          <Button variant="outline" size="sm">Вкл</Button>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div>
+                      <h3 className="font-heading font-bold text-lg mb-3">Внешний вид</h3>
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between p-3 bg-card/50 rounded-lg">
+                          <div>
+                            <p className="font-semibold">Тема оформления</p>
+                            <p className="text-sm text-muted-foreground">
+                              Темная тема
+                            </p>
+                          </div>
+                          <Button variant="outline" size="sm">Изм</Button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </ScrollArea>
+              </DialogContent>
+            </Dialog>
           </div>
         </div>
       </header>
