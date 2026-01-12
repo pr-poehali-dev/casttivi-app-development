@@ -1,13 +1,31 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Slider } from '@/components/ui/slider';
 import Icon from '@/components/ui/icon';
 
-const podcasts = [
+type Podcast = {
+  id: number;
+  title: string;
+  author: string;
+  avatar: string;
+  duration: string;
+  views: number;
+  likes: number;
+  gradient: string;
+  category: string;
+  rating: number;
+  audioUrl?: string;
+};
+
+const initialPodcasts: Podcast[] = [
   {
     id: 1,
     title: 'Квантовая физика и будущее технологий',
@@ -89,14 +107,102 @@ const comments = [
 ];
 
 export default function Index() {
+  const [podcasts, setPodcasts] = useState<Podcast[]>(initialPodcasts);
   const [selectedPodcast, setSelectedPodcast] = useState<number | null>(null);
   const [activeSection, setActiveSection] = useState('main');
   const [likedPodcasts, setLikedPodcasts] = useState<Set<number>>(new Set());
   const [dislikedPodcasts, setDislikedPodcasts] = useState<Set<number>>(new Set());
   const [subscribedAuthors, setSubscribedAuthors] = useState<Set<string>>(new Set());
   const [newComment, setNewComment] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [volume, setVolume] = useState(80);
+  const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
+  const audioRef = useRef<HTMLAudioElement>(null);
+  
+  const [uploadForm, setUploadForm] = useState({
+    title: '',
+    category: '',
+    duration: '',
+    gradient: 'gradient-purple'
+  });
 
   const currentPodcast = podcasts.find(p => p.id === selectedPodcast);
+  const filteredPodcasts = podcasts.filter(p => 
+    p.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    p.author.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    p.category.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    const updateTime = () => setCurrentTime(audio.currentTime);
+    const updateDuration = () => setDuration(audio.duration);
+    const handleEnded = () => setIsPlaying(false);
+
+    audio.addEventListener('timeupdate', updateTime);
+    audio.addEventListener('loadedmetadata', updateDuration);
+    audio.addEventListener('ended', handleEnded);
+
+    return () => {
+      audio.removeEventListener('timeupdate', updateTime);
+      audio.removeEventListener('loadedmetadata', updateDuration);
+      audio.removeEventListener('ended', handleEnded);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (audioRef.current) {
+      audioRef.current.volume = volume / 100;
+    }
+  }, [volume]);
+
+  const togglePlayPause = () => {
+    if (!audioRef.current) return;
+    if (isPlaying) {
+      audioRef.current.pause();
+    } else {
+      audioRef.current.play();
+    }
+    setIsPlaying(!isPlaying);
+  };
+
+  const handleSeek = (value: number[]) => {
+    if (!audioRef.current) return;
+    audioRef.current.currentTime = value[0];
+    setCurrentTime(value[0]);
+  };
+
+  const formatTime = (time: number) => {
+    const minutes = Math.floor(time / 60);
+    const seconds = Math.floor(time % 60);
+    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+  };
+
+  const handleUploadPodcast = () => {
+    if (!uploadForm.title || !uploadForm.category) return;
+    
+    const newPodcast: Podcast = {
+      id: podcasts.length + 1,
+      title: uploadForm.title,
+      author: 'Вы',
+      avatar: 'Я',
+      duration: uploadForm.duration || '00:00',
+      views: 0,
+      likes: 0,
+      gradient: uploadForm.gradient,
+      category: uploadForm.category,
+      rating: 5.0
+    };
+    
+    setPodcasts([newPodcast, ...podcasts]);
+    setUploadDialogOpen(false);
+    setUploadForm({ title: '', category: '', duration: '', gradient: 'gradient-purple' });
+  };
 
   const handleLike = (id: number) => {
     setLikedPodcasts(prev => {
@@ -138,7 +244,7 @@ export default function Index() {
 
   const renderMainFeed = () => (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 p-6 animate-fade-in">
-      {podcasts.map((podcast, idx) => (
+      {filteredPodcasts.map((podcast, idx) => (
         <Card 
           key={podcast.id} 
           className={`overflow-hidden cursor-pointer hover-scale border-0 ${podcast.gradient} animate-scale-in`}
@@ -215,6 +321,72 @@ export default function Index() {
             <div className="max-w-4xl mx-auto p-6">
               <div className={`${currentPodcast.gradient} rounded-3xl aspect-video mb-6 flex items-center justify-center text-9xl font-heading font-bold text-white/30 animate-scale-in`}>
                 {currentPodcast.category[0]}
+              </div>
+
+              <div className="mb-8">
+                <Card className="bg-card/50 backdrop-blur-sm border-0 p-6 mb-6">
+                  <div className="flex items-center justify-center gap-6 mb-4">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="w-12 h-12"
+                      onClick={() => {
+                        if (audioRef.current) {
+                          audioRef.current.currentTime = Math.max(0, currentTime - 10);
+                        }
+                      }}
+                    >
+                      <Icon name="SkipBack" size={24} />
+                    </Button>
+                    <Button
+                      size="icon"
+                      className="w-16 h-16 rounded-full gradient-purple border-0"
+                      onClick={togglePlayPause}
+                    >
+                      <Icon name={isPlaying ? "Pause" : "Play"} size={28} />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="w-12 h-12"
+                      onClick={() => {
+                        if (audioRef.current) {
+                          audioRef.current.currentTime = Math.min(duration, currentTime + 10);
+                        }
+                      }}
+                    >
+                      <Icon name="SkipForward" size={24} />
+                    </Button>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Slider
+                      value={[currentTime]}
+                      max={duration || 100}
+                      step={1}
+                      onValueChange={handleSeek}
+                      className="cursor-pointer"
+                    />
+                    <div className="flex justify-between text-sm text-muted-foreground">
+                      <span>{formatTime(currentTime)}</span>
+                      <span>{formatTime(duration)}</span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3 mt-4">
+                    <Icon name="Volume2" size={20} />
+                    <Slider
+                      value={[volume]}
+                      max={100}
+                      step={1}
+                      onValueChange={(val) => setVolume(val[0])}
+                      className="w-32"
+                    />
+                    <span className="text-sm text-muted-foreground w-12">{volume}%</span>
+                  </div>
+                </Card>
+
+                <audio ref={audioRef} src={currentPodcast.audioUrl} />
               </div>
 
               <div className="mb-6">
@@ -403,16 +575,136 @@ export default function Index() {
             CastTivi
           </h1>
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="icon">
-              <Icon name="Search" size={24} />
-            </Button>
+            <Dialog>
+              <DialogTrigger asChild>
+                <Button variant="ghost" size="icon">
+                  <Icon name="Search" size={24} />
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-[600px]">
+                <DialogHeader>
+                  <DialogTitle className="font-heading text-2xl">Поиск подкастов</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <Input
+                    placeholder="Название, автор или категория..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="text-lg"
+                    autoFocus
+                  />
+                  {searchQuery && (
+                    <ScrollArea className="h-[400px]">
+                      <div className="space-y-3">
+                        {filteredPodcasts.length === 0 ? (
+                          <p className="text-center text-muted-foreground py-8">
+                            Ничего не найдено
+                          </p>
+                        ) : (
+                          filteredPodcasts.map((podcast) => (
+                            <Card
+                              key={podcast.id}
+                              className={`cursor-pointer hover-scale ${podcast.gradient} border-0`}
+                              onClick={() => {
+                                setSelectedPodcast(podcast.id);
+                                setSearchQuery('');
+                              }}
+                            >
+                              <div className="p-4 flex items-center gap-3 bg-card/95">
+                                <Avatar>
+                                  <AvatarFallback className="bg-primary/20 text-primary">
+                                    {podcast.avatar}
+                                  </AvatarFallback>
+                                </Avatar>
+                                <div className="flex-1 min-w-0">
+                                  <h4 className="font-heading font-bold text-sm line-clamp-1">
+                                    {podcast.title}
+                                  </h4>
+                                  <p className="text-xs text-muted-foreground">
+                                    {podcast.author} • {podcast.category}
+                                  </p>
+                                </div>
+                                <Badge variant="outline">{podcast.duration}</Badge>
+                              </div>
+                            </Card>
+                          ))
+                        )}
+                      </div>
+                    </ScrollArea>
+                  )}
+                </div>
+              </DialogContent>
+            </Dialog>
+            
             <Button variant="ghost" size="icon">
               <Icon name="Bell" size={24} />
             </Button>
-            <Button className="gradient-purple border-0">
-              <Icon name="Upload" size={18} className="mr-2" />
-              Загрузить
-            </Button>
+            
+            <Dialog open={uploadDialogOpen} onOpenChange={setUploadDialogOpen}>
+              <DialogTrigger asChild>
+                <Button className="gradient-purple border-0">
+                  <Icon name="Upload" size={18} className="mr-2" />
+                  Загрузить
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-[500px]">
+                <DialogHeader>
+                  <DialogTitle className="font-heading text-2xl">Загрузить подкаст</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="title">Название подкаста</Label>
+                    <Input
+                      id="title"
+                      placeholder="Введите название..."
+                      value={uploadForm.title}
+                      onChange={(e) => setUploadForm({ ...uploadForm, title: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="category">Категория</Label>
+                    <Input
+                      id="category"
+                      placeholder="Наука, Музыка, Бизнес..."
+                      value={uploadForm.category}
+                      onChange={(e) => setUploadForm({ ...uploadForm, category: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="duration">Длительность</Label>
+                    <Input
+                      id="duration"
+                      placeholder="00:00"
+                      value={uploadForm.duration}
+                      onChange={(e) => setUploadForm({ ...uploadForm, duration: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Цветовая схема</Label>
+                    <div className="flex gap-3">
+                      {['gradient-purple', 'gradient-orange', 'gradient-blue'].map((grad) => (
+                        <button
+                          key={grad}
+                          className={`w-12 h-12 rounded-lg ${grad} ${
+                            uploadForm.gradient === grad ? 'ring-4 ring-primary' : ''
+                          }`}
+                          onClick={() => setUploadForm({ ...uploadForm, gradient: grad })}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                  <Button
+                    className="w-full gradient-purple border-0"
+                    onClick={handleUploadPodcast}
+                    disabled={!uploadForm.title || !uploadForm.category}
+                  >
+                    <Icon name="Upload" size={18} className="mr-2" />
+                    Опубликовать подкаст
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
+            
             <Avatar className="border-2 border-primary cursor-pointer hover-scale">
               <AvatarFallback className="bg-primary/20 text-primary font-semibold">
                 Я
